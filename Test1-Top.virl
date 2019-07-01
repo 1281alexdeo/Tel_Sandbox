@@ -3,12 +3,62 @@
     <extensions>
         <entry key="management_network" type="String">user</entry>
     </extensions>
-    <node location="490,-35" type="SIMPLE" subtype="IOSv" name="iosv-1" ipv4="192.168.0.3">
+    <node location="233,189" type="SIMPLE" subtype="server" name="Host 1" ipv4="192.168.0.3">
         <extensions>
-            <entry key="config" type="string">! IOS Config generated on 2019-07-01 01:09
+            <entry key="config" type="string">#cloud-config
+bootcmd:
+- ln -s -t /etc/rc.d /etc/rc.local
+hostname: Host_1
+manage_etc_hosts: true
+runcmd:
+- systemctl start rc-local
+- sed -i '/^\s*PasswordAuthentication\s\+no/d' /etc/ssh/sshd_config
+- echo "UseDNS no" &gt;&gt; /etc/ssh/sshd_config
+- service ssh restart
+- service sshd restart
+users:
+- default
+- gecos: User configured by VIRL Configuration Engine 0.23.12
+  lock-passwd: false
+  name: cisco
+  plain-text-passwd: cisco
+  shell: /bin/bash
+  ssh-authorized-keys:
+  - VIRL-USER-SSH-PUBLIC-KEY
+  sudo: ALL=(ALL) ALL
+write_files:
+- path: /etc/systemd/system/dhclient@.service
+  content: |
+    [Unit]
+    Description=Run dhclient on %i interface
+    After=network.target
+    [Service]
+    Type=oneshot
+    ExecStart=/sbin/dhclient %i -nw -pf /var/run/dhclient.%i.pid -lf /var/lib/dhclient/dhclient.%i.lease
+    ExecStart=/sbin/dhclient %i -nw -pf /var/run/dhclient6.%i.pid -6 -S
+    RemainAfterExit=yes
+  owner: root:root
+  permissions: '0644'
+- path: /etc/rc.local
+  owner: root:root
+  permissions: '0755'
+  content: |-
+    #!/bin/sh
+    ifconfig eth1 up 192.168.0.2 netmask 255.255.255.0
+    route add -host 192.168.0.10 gw 192.168.0.1 dev eth1
+    route add -net 192.168.0.0/23 gw 192.168.0.1 dev eth1
+    exit 0
+</entry>
+            <entry key="AutoNetkit.ASN" type="Integer">1</entry>
+        </extensions>
+        <interface name="eth1" id="0" ipv4="192.168.0.2" netPrefixLenV4="24"/>
+    </node>
+    <node location="490,-35" type="SIMPLE" subtype="IOSv" name="Router 1" ipv4="192.168.10.10">
+        <extensions>
+            <entry key="config" type="string">! IOS Config generated on 2019-07-01 05:37
 ! by autonetkit_0.24.1
 !
-hostname iosv-1
+hostname Router_1
 boot-start-marker
 boot-end-marker
 !
@@ -55,7 +105,7 @@ no cdp run
 !
 interface Loopback0
   description Loopback
-  ip address 192.168.0.3 255.255.255.255
+  ip address 192.168.10.10 255.255.255.0
 !
 interface GigabitEthernet0/0
   description OOB Management
@@ -67,39 +117,35 @@ interface GigabitEthernet0/0
   no shutdown
 !
 interface GigabitEthernet0/1
-  description to iosvl2-1
-  ip address 10.0.0.1 255.255.0.0
-  ip ospf cost 1
+  description to Switch_1
+  ip address 192.168.0.1 255.255.255.0
+
   duplex full
   speed auto
   no shutdown
 !
 interface GigabitEthernet0/2
-  description to iosvl2-2
-  ip address 10.0.0.2 255.255.0.0
-  ip ospf cost 1
+  description to Switch_2
+  ip address 192.168.1.1 255.255.255.0
+ 
   duplex full
   speed auto
   no shutdown
 !
 !
 !
-router ospf 1
-  network 192.168.0.3 0.0.0.0 area 0
-  log-adjacency-changes
-  passive-interface Loopback0
-  network 10.0.0.0 0.0.255.255 area 0
-!
+ip route 192.168.0.0 192.168.0.1
+ip route 192.168.1.0 192.168.1.1
 !
 end</entry>
             <entry key="AutoNetkit.ASN" type="Integer">1</entry>
         </extensions>
-        <interface name="GigabitEthernet0/1" id="0" ipv4="10.0.0.1" netPrefixLenV4="16"/>
-        <interface name="GigabitEthernet0/2" id="1" ipv4="10.0.0.2" netPrefixLenV4="16"/>
+        <interface name="GigabitEthernet0/1" id="0" ipv4="192.168.0.1" netPrefixLenV4="24"/>
+        <interface name="GigabitEthernet0/2" id="1" ipv4="192.168.1.1" netPrefixLenV4="24"/>
     </node>
-    <node location="334,100" type="SIMPLE" subtype="IOSvL2" name="iosvl2-1">
+    <node location="339,100" type="SIMPLE" subtype="IOSvL2" name="Switch 1">
         <extensions>
-            <entry key="config" type="string">! IOSvL2 Config generated on 2019-07-01 01:09
+            <entry key="config" type="string">! IOSvL2 Config generated on 2019-07-01 05:37
 ! by autonetkit_0.24.1
 !
 version 15.2
@@ -123,7 +169,7 @@ login local
 line con 0
 password cisco
 !
-hostname iosvl2-1
+hostname Switch_1
 !
 boot-start-marker
 boot-end-marker
@@ -181,7 +227,7 @@ interface GigabitEthernet0/0
   no shutdown
 !
 interface GigabitEthernet0/1
-  description to iosv-1
+  description to Router_1
   switchport access vlan 2
   switchport mode access
   no shutdown
@@ -191,7 +237,7 @@ interface GigabitEthernet0/2
   no shutdown
 !
 interface GigabitEthernet0/3
-  description to server-1
+  description to Host_1
   switchport access vlan 2
   switchport mode access
   no shutdown
@@ -229,9 +275,9 @@ end
         <interface name="GigabitEthernet1/0" id="3"/>
         <interface name="GigabitEthernet1/1" id="4"/>
     </node>
-    <node location="636,100" type="SIMPLE" subtype="IOSvL2" name="iosvl2-2">
+    <node location="636,100" type="SIMPLE" subtype="IOSvL2" name="Switch 2">
         <extensions>
-            <entry key="config" type="string">! IOSvL2 Config generated on 2019-07-01 01:09
+            <entry key="config" type="string">! IOSvL2 Config generated on 2019-07-01 05:37
 ! by autonetkit_0.24.1
 !
 version 15.2
@@ -255,7 +301,7 @@ login local
 line con 0
 password cisco
 !
-hostname iosvl2-2
+hostname Switch_2
 !
 boot-start-marker
 boot-end-marker
@@ -313,7 +359,7 @@ interface GigabitEthernet0/0
   no shutdown
 !
 interface GigabitEthernet0/1
-  description to iosv-1
+  description to Router_1
   switchport access vlan 2
   switchport mode access
   no shutdown
@@ -323,7 +369,7 @@ interface GigabitEthernet0/2
   no shutdown
 !
 interface GigabitEthernet0/3
-  description to server-2
+  description to host_2
   switchport access vlan 2
   switchport mode access
   no shutdown
@@ -361,12 +407,12 @@ end
         <interface name="GigabitEthernet1/0" id="3"/>
         <interface name="GigabitEthernet1/1" id="4"/>
     </node>
-    <node location="225,189" type="SIMPLE" subtype="server" name="server-1">
+    <node location="740,189" type="SIMPLE" subtype="server" name="host 2" ipv4="192.168.1.2">
         <extensions>
             <entry key="config" type="string">#cloud-config
 bootcmd:
 - ln -s -t /etc/rc.d /etc/rc.local
-hostname: server-1
+hostname: host_2
 manage_etc_hosts: true
 runcmd:
 - systemctl start rc-local
@@ -402,67 +448,17 @@ write_files:
   permissions: '0755'
   content: |-
     #!/bin/sh
-    ifconfig eth1 up 10.0.0.3 netmask 255.255.0.0
-    route add -host 192.168.0.3 gw 10.0.0.1 dev eth1
-    route add -net 10.0.0.0/16 gw 10.0.0.1 dev eth1
+    ifconfig eth1 up 192.168.1.3 netmask 255.255.255.0
+    route add -host 192.168.0.10 gw 192.168.1.1 dev eth1
+    route add -net 192.168.0.0/23 gw 192.168.1.1 dev eth1
     exit 0
 </entry>
             <entry key="AutoNetkit.ASN" type="Integer">1</entry>
         </extensions>
-        <interface name="eth1" id="0" ipv4="10.0.0.3" netPrefixLenV4="16"/>
+        <interface name="eth1" id="0" ipv4="192.168.1.3" netPrefixLenV4="24"/>
     </node>
-    <node location="738,189" type="SIMPLE" subtype="server" name="server-2">
-        <extensions>
-            <entry key="config" type="string">#cloud-config
-bootcmd:
-- ln -s -t /etc/rc.d /etc/rc.local
-hostname: server-2
-manage_etc_hosts: true
-runcmd:
-- systemctl start rc-local
-- sed -i '/^\s*PasswordAuthentication\s\+no/d' /etc/ssh/sshd_config
-- echo "UseDNS no" &gt;&gt; /etc/ssh/sshd_config
-- service ssh restart
-- service sshd restart
-users:
-- default
-- gecos: User configured by VIRL Configuration Engine 0.23.12
-  lock-passwd: false
-  name: cisco
-  plain-text-passwd: cisco
-  shell: /bin/bash
-  ssh-authorized-keys:
-  - VIRL-USER-SSH-PUBLIC-KEY
-  sudo: ALL=(ALL) ALL
-write_files:
-- path: /etc/systemd/system/dhclient@.service
-  content: |
-    [Unit]
-    Description=Run dhclient on %i interface
-    After=network.target
-    [Service]
-    Type=oneshot
-    ExecStart=/sbin/dhclient %i -nw -pf /var/run/dhclient.%i.pid -lf /var/lib/dhclient/dhclient.%i.lease
-    ExecStart=/sbin/dhclient %i -nw -pf /var/run/dhclient6.%i.pid -6 -S
-    RemainAfterExit=yes
-  owner: root:root
-  permissions: '0644'
-- path: /etc/rc.local
-  owner: root:root
-  permissions: '0755'
-  content: |-
-    #!/bin/sh
-    ifconfig eth1 up 10.0.0.4 netmask 255.255.0.0
-    route add -host 192.168.0.3 gw 10.0.0.2 dev eth1
-    route add -net 10.0.0.0/16 gw 10.0.0.2 dev eth1
-    exit 0
-</entry>
-            <entry key="AutoNetkit.ASN" type="Integer">1</entry>
-        </extensions>
-        <interface name="eth1" id="0" ipv4="10.0.0.4" netPrefixLenV4="16"/>
-    </node>
-    <connection src="/virl:topology/virl:node[5]/virl:interface[1]" dst="/virl:topology/virl:node[3]/virl:interface[3]"/>
-    <connection src="/virl:topology/virl:node[4]/virl:interface[1]" dst="/virl:topology/virl:node[2]/virl:interface[3]"/>
-    <connection src="/virl:topology/virl:node[1]/virl:interface[1]" dst="/virl:topology/virl:node[2]/virl:interface[1]"/>
-    <connection src="/virl:topology/virl:node[1]/virl:interface[2]" dst="/virl:topology/virl:node[3]/virl:interface[1]"/>
+    <connection src="/virl:topology/virl:node[1]/virl:interface[1]" dst="/virl:topology/virl:node[3]/virl:interface[3]"/>
+    <connection src="/virl:topology/virl:node[2]/virl:interface[1]" dst="/virl:topology/virl:node[3]/virl:interface[1]"/>
+    <connection src="/virl:topology/virl:node[2]/virl:interface[2]" dst="/virl:topology/virl:node[4]/virl:interface[1]"/>
+    <connection src="/virl:topology/virl:node[5]/virl:interface[1]" dst="/virl:topology/virl:node[4]/virl:interface[3]"/>
 </topology>
